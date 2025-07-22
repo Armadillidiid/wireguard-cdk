@@ -5,6 +5,10 @@ import { env } from "../env.js";
 
 const app = new cdk.App();
 new WireguardCdkStack(app, "WireguardCdkStack", {
+  env: {
+    account: env.CDK_DEFAULT_ACCOUNT,
+    region: env.CDK_DEFAULT_REGION,
+  },
   instanceClass: env.EC2_INSTANCE_CLASS,
   instanceSize: env.EC2_INSTANCE_SIZE,
   sshPubKey: env.SSH_PUB_KEY,

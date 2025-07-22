@@ -1,5 +1,5 @@
 {
-  "app": "pnpm exec ts-node --prefer-ts-exts bin/wireguard-cdk.ts",
+  "app": "node --experimental-strip-types --env-file=.env bin/wireguard-cdk.ts",
   "watch": {
     "include": [
       "**"
