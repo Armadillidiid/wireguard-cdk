@@ -8,4 +8,6 @@ new WireguardCdkStack(app, "WireguardCdkStack", {
   instanceClass: env.EC2_INSTANCE_CLASS,
   instanceSize: env.EC2_INSTANCE_SIZE,
   sshPubKey: env.SSH_PUB_KEY,
+  domain: env.DOMAIN,
+  email: env.EMAIL,
 });

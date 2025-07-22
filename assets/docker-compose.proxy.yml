@@ -2,15 +2,20 @@ services:
   caddy:
     container_name: caddy
     image: caddy:2.10.0-alpine
+    environment:
+      - DOMAIN=${DOMAIN}
+      - EMAIL=${EMAIL}
+    env_file:
+      - .env
     ports:
-      - '80:80/tcp'
-      - '443:443/tcp'
-      - '443:443/udp'
+      - "80:80/tcp"
+      - "443:443/tcp"
+      - "443:443/udp"
     networks:
       - caddy
     restart: unless-stopped
     volumes:
-      - './Caddyfile:/etc/caddy/Caddyfile:ro'
+      - "./Caddyfile:/etc/caddy/Caddyfile:ro"
       - config:/config
       - data:/data
 

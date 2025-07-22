@@ -1,4 +1,4 @@
-import { Duration, Stack, StackProps } from "aws-cdk-lib";
+import { CfnOutput, Stack, StackProps } from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as assets from "aws-cdk-lib/aws-s3-assets";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -13,30 +13,36 @@ type WireguardCdkStackProps = StackProps & {
   instanceClass: ec2.InstanceClass;
   instanceSize: ec2.InstanceSize;
   sshPubKey: string;
+  domain: string;
+  email: string;
 };
 
 export class WireguardCdkStack extends Stack {
   constructor(scope: Construct, id: string, props: WireguardCdkStackProps) {
     super(scope, id, props);
 
+    // Get default VPC
     const vpc = ec2.Vpc.fromLookup(this, "VPC", { isDefault: true });
 
+    // Create security group for inbound and outbound traffic
     const sg = new ec2.SecurityGroup(this, "SSHSecurityGroup", {
       vpc: vpc,
       description: "Security Group for SSH",
       allowAllOutbound: true,
     });
 
-    // Allow inbound traffic
+    // SSH access
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22));
+
+    // Web portal access
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443));
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.udp(443));
+
+    // WireGuard VPN access
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.udp(51820));
+    sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(51821));
 
-    // Allow outbound traffic
-    sg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.allTraffic());
-
-    // Create asset from your assets directory
+    // Create asset from `assets` directory to include configuration files
     const configAsset = new assets.Asset(this, "ConfigAsset", {
       path: path.join(__dirname, "../assets"),
     });
@@ -65,6 +71,9 @@ export class WireguardCdkStack extends Stack {
       "mkdir -p /home/ubuntu/wireguard",
       "cp -r assets/* /home/ubuntu/wireguard/",
       "chown -R ubuntu:ubuntu /home/ubuntu/wireguard",
+      `echo "DOMAIN=${props.domain}" > /home/ubuntu/wireguard/.env`,
+      `echo "EMAIL=${props.email}" >> /home/ubuntu/wireguard/.env`,
+      "chown ubuntu:ubuntu /home/ubuntu/wireguard/.env",
       "systemctl enable docker",
       "systemctl start docker",
       "usermod -aG docker ubuntu",
@@ -103,5 +112,15 @@ export class WireguardCdkStack extends Stack {
 
     // Add the SSH Security Group to the EC2 instance
     instance.addSecurityGroup(sg);
+
+    // Create and associate Elastic IP
+    const eip = new ec2.CfnEIP(this, "WireguardEIP", {
+      domain: "vpc",
+      instanceId: instance.instanceId,
+    });
+    new CfnOutput(this, "WireguardInstanceIP", {
+      value: eip.attrPublicIp,
+      description: "The public IP address of the WireGuard instance",
+    });
   }
 }
