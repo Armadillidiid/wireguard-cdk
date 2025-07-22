@@ -1,0 +1,8 @@
+{
+  email {$EMAIL:mail@example.com}
+}
+
+{$DOMAIN:localhost} {
+  reverse_proxy wg-easy:80
+  tls internal
+}
