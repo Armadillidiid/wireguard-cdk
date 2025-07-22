@@ -2,9 +2,6 @@ services:
   caddy:
     container_name: caddy
     image: caddy:2.10.0-alpine
-    environment:
-      - DOMAIN=${DOMAIN}
-      - EMAIL=${EMAIL}
     env_file:
       - .env
     ports:

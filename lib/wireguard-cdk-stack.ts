@@ -73,6 +73,7 @@ export class WireguardCdkStack extends Stack {
       "chown -R ubuntu:ubuntu /home/ubuntu/wireguard",
       `echo "DOMAIN=${props.domain}" > /home/ubuntu/wireguard/.env`,
       `echo "EMAIL=${props.email}" >> /home/ubuntu/wireguard/.env`,
+      'echo "INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)" >> /home/ubuntu/wireguard/.env',
       "chown ubuntu:ubuntu /home/ubuntu/wireguard/.env",
       "systemctl enable docker",
       "systemctl start docker",
