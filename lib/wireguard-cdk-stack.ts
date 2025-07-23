@@ -15,6 +15,8 @@ type WireguardCdkStackProps = StackProps & {
   sshPubKey: string;
   domain: string;
   email: string;
+  wireguardUsername: string;
+  wireguardPassword: string;
 };
 
 export class WireguardCdkStack extends Stack {
@@ -72,6 +74,8 @@ export class WireguardCdkStack extends Stack {
       `echo "EMAIL=${props.email}" >> ${homeDir}/wireguard/.env`,
       "TOKEN=$(curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600')",
       `echo "INSTANCE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)" >> ${homeDir}/wireguard/.env`,
+      `echo "INIT_USERNAME=${props.wireguardUsername}" >> ${homeDir}/wireguard/.env`,
+      `echo "INIT_PASSWORD=${props.wireguardPassword}" >> ${homeDir}/wireguard/.env`,
       `chown ${user}:${user} ${homeDir}/wireguard/.env`,
       "systemctl enable docker",
       "systemctl start docker",

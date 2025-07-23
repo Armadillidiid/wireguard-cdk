@@ -10,6 +10,14 @@ const schema = z.object({
     .string()
     .describe("SSH public key for EC2 instance access")
     .nonempty(),
+  WIREGUARD_USERNAME: z
+    .string()
+    .nonempty()
+    .describe("Default admin username for WireGuard web interface"),
+  WIREGUARD_PASSWORD: z
+    .string()
+    .nonempty()
+    .describe("Default admin password for WireGuard web interface"),
   CDK_DEFAULT_ACCOUNT: z.string().nonempty(),
   CDK_DEFAULT_REGION: z.string().nonempty(),
 });

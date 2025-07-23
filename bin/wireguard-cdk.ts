@@ -14,4 +14,6 @@ new WireguardCdkStack(app, "WireguardCdkStack", {
   sshPubKey: env.SSH_PUB_KEY,
   domain: env.DOMAIN,
   email: env.EMAIL,
+  wireguardUsername: env.WIREGUARD_USERNAME,
+  wireguardPassword: env.WIREGUARD_PASSWORD,
 });

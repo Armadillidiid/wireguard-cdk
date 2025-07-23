@@ -1,14 +1,57 @@
-# Welcome to your CDK TypeScript project
+# WireGuard CDK Stack
 
-This is a blank project for CDK development with TypeScript.
+This CDK project deploys a WireGuard VPN server on AWS EC2 with automatic SSL certificates and unattended setup.
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+## Environment Variables
+
+Create a `.env` file or set the following environment variables:
+
+```bash
+# AWS Configuration
+CDK_DEFAULT_ACCOUNT=your-aws-account-id
+CDK_DEFAULT_REGION=us-east-1
+
+# EC2 Instance Configuration
+EC2_INSTANCE_CLASS=t3
+EC2_INSTANCE_SIZE=micro
+SSH_PUB_KEY="ssh-rsa AAAAB3NzaC1yc2E... your-public-key"
+
+# SSL Certificate Configuration
+DOMAIN=vpn.example.com
+EMAIL=admin@example.com
+
+# WireGuard Admin Configuration (Unattended Setup)
+WIREGUARD_USERNAME=admin
+WIREGUARD_PASSWORD=YourSecurePassword123
+```
+
+## Deployment
+
+1. Install dependencies:
+
+   ```bash
+   pnpm install
+   ```
+
+2. Set up your environment variables (create `.env` file or export them)
+
+3. Deploy the stack:
+
+   ```bash
+   pnpx cdk deploy
+   ```
+
+4. After deployment, access your WireGuard admin panel at:
+
+   ```
+   https://your-domain.com
+   ```
 
 ## Useful commands
 
-* `pnpm run build`   compile typescript to js
-* `pnpm run watch`   watch for changes and compile
-* `pnpm run test`    perform the jest unit tests
-* `pnpx cdk deploy`  deploy this stack to your default AWS account/region
-* `pnpx cdk diff`    compare deployed stack with current state
-* `pnpx cdk synth`   emits the synthesized CloudFormation template
+- `pnpm run build` compile typescript to js
+- `pnpm run watch` watch for changes and compile
+- `pnpm run test` perform the jest unit tests
+- `pnpx cdk deploy` deploy this stack to your default AWS account/region
+- `pnpx cdk diff` compare deployed stack with current state
+- `pnpx cdk synth` emits the synthesized CloudFormation template
