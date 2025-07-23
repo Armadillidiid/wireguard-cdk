@@ -4,5 +4,4 @@
 
 {$DOMAIN}, {$INSTANCE_IP} {
   reverse_proxy wg-easy:80
-  tls internal
 }
