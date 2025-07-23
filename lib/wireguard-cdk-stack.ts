@@ -1,4 +1,4 @@
-import { CfnOutput, Stack, StackProps } from "aws-cdk-lib";
+import { CfnOutput, Duration, Stack, StackProps } from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as assets from "aws-cdk-lib/aws-s3-assets";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -35,6 +35,7 @@ export class WireguardCdkStack extends Stack {
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22));
 
     // Web portal access
+    sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80));
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443));
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.udp(443));
 
@@ -47,38 +48,36 @@ export class WireguardCdkStack extends Stack {
       path: path.join(__dirname, "../assets"),
     });
 
+    const homeDir = "/home/ubuntu";
+    const user = "ubuntu";
+
     // Add user data that is used to configure the EC2 instance
     const userData = ec2.UserData.forLinux();
-    // NOTE: Default Ubuntu distribution does not have cfn-signal installed.
-    // We need to install it manually.
     userData.addCommands(
       "apt-get update -y",
-      "apt-get install -y git awscli ec2-instance-connect",
-      'until git clone https://github.com/aws-quickstart/quickstart-linux-utilities.git; do echo "Retrying"; done',
-      "cd /quickstart-linux-utilities",
-      "source quickstart-cfn-tools.source",
-      "qs_update-os || qs_err",
-      "qs_bootstrap_pip || qs_err",
-      "qs_aws-cfn-bootstrap || qs_err",
+      "apt-get install -y python3-pip",
+      "PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz",
       "mkdir -p /opt/aws/bin",
       "ln -s /usr/local/bin/cfn-* /opt/aws/bin/",
+      "ln -s /usr/local/bin/cfn-hup /etc/init.d/cfn-hup",
+      "snap install aws-cli --classic",
+      "apt-get install -y git ec2-instance-connect unzip docker.io docker-compose",
     );
     userData.addCommands(
-      "apt update -y",
-      "apt install -y unzip docker.io docker-compose",
       `aws s3 cp s3://${configAsset.s3BucketName}/${configAsset.s3ObjectKey} /tmp/assets.zip`,
-      "cd /tmp && unzip assets.zip",
-      "mkdir -p /home/ubuntu/wireguard",
-      "cp -r assets/* /home/ubuntu/wireguard/",
-      "chown -R ubuntu:ubuntu /home/ubuntu/wireguard",
-      `echo "DOMAIN=${props.domain}" > /home/ubuntu/wireguard/.env`,
-      `echo "EMAIL=${props.email}" >> /home/ubuntu/wireguard/.env`,
-      'echo "INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)" >> /home/ubuntu/wireguard/.env',
-      "chown ubuntu:ubuntu /home/ubuntu/wireguard/.env",
+      `mkdir -p ${homeDir}/wireguard`,
+      `unzip -d ${homeDir}/wireguard /tmp/assets.zip`,
+      `chown -R ${user}:${user} ${homeDir}/wireguard`,
+      `echo "DOMAIN=${props.domain}" > ${homeDir}/wireguard/.env`,
+      `echo "EMAIL=${props.email}" >> ${homeDir}/wireguard/.env`,
+      "TOKEN=$(curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600')",
+      `echo "INSTANCE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)" >> ${homeDir}/wireguard/.env`,
+      `chown ${user}:${user} ${homeDir}/wireguard/.env`,
       "systemctl enable docker",
       "systemctl start docker",
-      "usermod -aG docker ubuntu",
-      "cd /home/ubuntu/wireguard",
+      `usermod -aG docker ${user}`,
+      "newgrp docker",
+      `cd ${homeDir}/wireguard`,
       "docker-compose -f docker-compose.proxy.yml up -d",
       "docker-compose -f docker-compose.yml up -d",
     );
@@ -98,17 +97,22 @@ export class WireguardCdkStack extends Stack {
       ),
       machineImage: ec2.MachineImage.fromSsmParameter(
         "/aws/service/canonical/ubuntu/server/jammy/stable/current/amd64/hvm/ebs-gp2/ami-id", // Ubuntu 22.04 LTS
-        { os: ec2.OperatingSystemType.LINUX },
+        { os: ec2.OperatingSystemType.LINUX, userData: userData },
       ),
       securityGroup: sg,
       role: role,
-      userData: userData,
       init: ec2.CloudFormationInit.fromElements(
         ec2.InitFile.fromString(
-          "/home/ubuntu/.ssh/authorized_keys",
+          `${homeDir}/.ssh/authorized_keys`,
           props.sshPubKey + "\n",
         ),
       ),
+      initOptions: {
+        timeout: Duration.minutes(10),
+        includeUrl: true,
+        includeRole: true,
+      },
+      requireImdsv2: true,
     });
 
     // Add the SSH Security Group to the EC2 instance

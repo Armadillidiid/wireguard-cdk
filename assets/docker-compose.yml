@@ -3,12 +3,6 @@ volumes:
 
 services:
   wg-easy:
-    #environment:
-    #  Optional:
-    #  - PORT=51821
-    #  - HOST=0.0.0.0
-    #  - INSECURE=false
-
     image: ghcr.io/wg-easy/wg-easy:15
     container_name: wg-easy
     networks:
@@ -20,8 +14,8 @@ services:
       - /lib/modules:/lib/modules:ro
     ports:
       - "51820:51820/udp"
-      - "51821:51821/tcp"
-    restart: unless-stopped
+    environment:
+      - PORT=80
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
@@ -32,6 +26,7 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
       - net.ipv6.conf.all.forwarding=1
       - net.ipv6.conf.default.forwarding=1
+    restart: unless-stopped
 
 networks:
   wg:
