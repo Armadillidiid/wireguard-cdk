@@ -19,10 +19,28 @@ SSH_PUB_KEY="ssh-rsa AAAAB3NzaC1yc2E... your-public-key"
 # SSL Certificate Configuration
 DOMAIN=vpn.example.com
 EMAIL=admin@example.com
+```
 
-# WireGuard Admin Configuration (Unattended Setup)
-WIREGUARD_USERNAME=admin
-WIREGUARD_PASSWORD=YourSecurePassword123
+## WireGuard Admin Configuration
+
+The WireGuard admin credentials can be provided at deployment time using CDK context variables.
+
+**Option 1: Using CDK Context (Recommended)**
+
+```bash
+pnpx cdk deploy -c wireguard-username=myadmin -c wireguard-password=MySecurePassword123
+```
+
+**Option 2: Using cdk.json**
+Add to your `cdk.json`:
+
+```json
+{
+  "context": {
+    "wireguard-username": "myadmin",
+    "wireguard-password": "MySecurePassword123"
+  }
+}
 ```
 
 ## Deployment
@@ -36,6 +54,14 @@ WIREGUARD_PASSWORD=YourSecurePassword123
 2. Set up your environment variables (create `.env` file or export them)
 
 3. Deploy the stack:
+
+   **With custom credentials:**
+
+   ```bash
+   pnpx cdk deploy -c wireguard-username=myadmin -c wireguard-password=MySecurePassword123
+   ```
+
+   **With default credentials:**
 
    ```bash
    pnpx cdk deploy
