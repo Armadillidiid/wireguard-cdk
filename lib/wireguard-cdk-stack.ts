@@ -112,6 +112,12 @@ export class WireguardCdkStack extends Stack {
     });
     configAsset.grantRead(role);
 
+    // Create SSH Key Pair
+    const key = ec2.KeyPair.fromKeyPairAttributes(this, "WireguardKeyPair", {
+      keyPairName: "wireguard-keypair",
+      type: ec2.KeyPairType.RSA,
+    });
+
     // Create a new EC2 instance
     const instance = new ec2.Instance(this, "WireguardInstance", {
       vpc: vpc,
@@ -125,6 +131,7 @@ export class WireguardCdkStack extends Stack {
       ),
       securityGroup: sg,
       role: role,
+      keyName: key.keyPairName,
       init: ec2.CloudFormationInit.fromElements(
         ec2.InitFile.fromString(
           `${homeDir}/.ssh/authorized_keys`,
