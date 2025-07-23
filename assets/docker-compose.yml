@@ -11,6 +11,7 @@ services:
       wg:
         ipv4_address: 10.42.42.42
         ipv6_address: fdcc:ad94:bacf:61a3::2a
+      caddy: {}
     volumes:
       - etc_wireguard:/etc/wireguard
       - /lib/modules:/lib/modules:ro
@@ -23,7 +24,7 @@ services:
       - INIT_USERNAME=${INIT_USERNAME}
       - INIT_PASSWORD=${INIT_PASSWORD}
       - INIT_HOST=0.0.0.0
-      - INIT_PORT=80
+      - INIT_PORT=51820
     cap_add:
       - NET_ADMIN
       - SYS_MODULE

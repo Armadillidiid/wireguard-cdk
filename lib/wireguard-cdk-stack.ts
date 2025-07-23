@@ -36,8 +36,9 @@ export class WireguardCdkStack extends Stack {
 
     const wireguardPasswordParam = new CfnParameter(this, "WireguardPassword", {
       type: "String",
-      description: "Admin password for WireGuard web interface",
-      minLength: 1,
+      description:
+        "Admin password for WireGuard web interface (Minimum 12 characters)",
+      minLength: 12,
       maxLength: 128,
       noEcho: true,
     });
