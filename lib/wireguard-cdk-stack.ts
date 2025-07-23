@@ -1,4 +1,10 @@
-import { CfnOutput, Duration, Stack, StackProps } from "aws-cdk-lib";
+import {
+  CfnOutput,
+  CfnParameter,
+  Duration,
+  Stack,
+  StackProps,
+} from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as assets from "aws-cdk-lib/aws-s3-assets";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -15,13 +21,26 @@ type WireguardCdkStackProps = StackProps & {
   sshPubKey: string;
   domain: string;
   email: string;
-  wireguardUsername: string;
-  wireguardPassword: string;
 };
 
 export class WireguardCdkStack extends Stack {
   constructor(scope: Construct, id: string, props: WireguardCdkStackProps) {
     super(scope, id, props);
+
+    const wireguardUsernameParam = new CfnParameter(this, "WireguardUsername", {
+      type: "String",
+      description: "Admin username for WireGuard web interface",
+      minLength: 1,
+      maxLength: 50,
+    });
+
+    const wireguardPasswordParam = new CfnParameter(this, "WireguardPassword", {
+      type: "String",
+      description: "Admin password for WireGuard web interface",
+      minLength: 1,
+      maxLength: 128,
+      noEcho: true,
+    });
 
     // Get default VPC
     const vpc = ec2.Vpc.fromLookup(this, "VPC", { isDefault: true });
@@ -74,8 +93,8 @@ export class WireguardCdkStack extends Stack {
       `echo "EMAIL=${props.email}" >> ${homeDir}/wireguard/.env`,
       "TOKEN=$(curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600')",
       `echo "INSTANCE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)" >> ${homeDir}/wireguard/.env`,
-      `echo "INIT_USERNAME=${props.wireguardUsername}" >> ${homeDir}/wireguard/.env`,
-      `echo "INIT_PASSWORD=${props.wireguardPassword}" >> ${homeDir}/wireguard/.env`,
+      `echo "INIT_USERNAME=${wireguardUsernameParam.valueAsString}" >> ${homeDir}/wireguard/.env`,
+      `echo "INIT_PASSWORD=${wireguardPasswordParam.valueAsString}" >> ${homeDir}/wireguard/.env`,
       `chown ${user}:${user} ${homeDir}/wireguard/.env`,
       "systemctl enable docker",
       "systemctl start docker",

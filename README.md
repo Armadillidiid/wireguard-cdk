@@ -23,25 +23,15 @@ EMAIL=admin@example.com
 
 ## WireGuard Admin Configuration
 
-The WireGuard admin credentials can be provided at deployment time using CDK context variables.
+The WireGuard admin credentials are provided as CloudFormation parameters at deployment time. If not provided, defaults will be used (`admin` / `admin123`).
 
-**Option 1: Using CDK Context (Recommended)**
-
+**Option 1: Using CDK Deploy Parameters (Recommended)**
 ```bash
-pnpx cdk deploy -c wireguard-username=myadmin -c wireguard-password=MySecurePassword123
+pnpx cdk deploy --parameters WireguardUsername=myadmin --parameters WireguardPassword=MySecurePassword123
 ```
 
-**Option 2: Using cdk.json**
-Add to your `cdk.json`:
-
-```json
-{
-  "context": {
-    "wireguard-username": "myadmin",
-    "wireguard-password": "MySecurePassword123"
-  }
-}
-```
+**Option 2: Using CloudFormation Console**
+When deploying through the AWS CloudFormation console, you'll be prompted to enter the parameter values.
 
 ## Deployment
 
@@ -55,16 +45,8 @@ Add to your `cdk.json`:
 
 3. Deploy the stack:
 
-   **With custom credentials:**
-
    ```bash
-   pnpx cdk deploy -c wireguard-username=myadmin -c wireguard-password=MySecurePassword123
-   ```
-
-   **With default credentials:**
-
-   ```bash
-   pnpx cdk deploy
+   pnpx cdk deploy --parameters WireguardUsername=myadmin --parameters WireguardPassword=MySecurePassword123
    ```
 
 4. After deployment, access your WireGuard admin panel at:
