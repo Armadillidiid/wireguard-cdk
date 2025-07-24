@@ -8,6 +8,7 @@ import {
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as assets from "aws-cdk-lib/aws-s3-assets";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -70,6 +71,13 @@ export class WireguardCdkStack extends Stack {
       path: path.join(__dirname, "../assets"),
     });
 
+    // Create S3 bucket for WireGuard backups
+    const backupBucket = new s3.Bucket(this, "WireguardBackupBucket", {
+      bucketName: `wireguard-backups-${this.account}`,
+      publicReadAccess: false,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    });
+
     const homeDir = "/home/ubuntu";
     const user = "ubuntu";
 
@@ -102,15 +110,29 @@ export class WireguardCdkStack extends Stack {
       `usermod -aG docker ${user}`,
       "newgrp docker",
       `cd ${homeDir}/wireguard`,
+      `mkdir -p ${homeDir}/wireguard/data`,
+      `chown -R ${user}:${user} ${homeDir}/wireguard/data`,
+      `aws s3 cp s3://${backupBucket.bucketName}/wireguard-backup.tar.gz /tmp/wireguard-backup.tar.gz || echo 'No backup found, starting fresh'`,
+      "if [ -f /tmp/wireguard-backup.tar.gz ]; then tar -xzf /tmp/wireguard-backup.tar.gz -C /tmp; fi",
+      `if [ -d /tmp/data ]; then cp -r /tmp/data/* ${homeDir}/wireguard/data/; chown -R ${user}:${user} ${homeDir}/wireguard/data; rm -rf /tmp/data /tmp/wireguard-backup.tar.gz; fi`,
       "docker-compose -f docker-compose.proxy.yml up -d",
       "docker-compose -f docker-compose.yml up -d",
     );
 
-    // Create IAM role for the instance with S3 read permissions
+    userData.addCommands(
+      `cp ${homeDir}/wireguard/backup-wireguard.sh ${homeDir}/backup-wireguard.sh`,
+      `chmod +x ${homeDir}/backup-wireguard.sh`,
+      `chown ${user}:${user} ${homeDir}/backup-wireguard.sh`,
+      `echo "0 0 * * * ${user} ${homeDir}/backup-wireguard.sh ${backupBucket.bucketName}" | tee /etc/cron.d/wg-easy-backup`,
+      `( sleep 60; ./${homeDir}/backup-wireguard.sh ${backupBucket.bucketName} ) &`,
+    );
+
+    // Create IAM role for the instance with S3 read/write permissions
     const role = new iam.Role(this, "InstanceRole", {
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
     });
     configAsset.grantRead(role);
+    backupBucket.grantReadWrite(role);
 
     // Create a new EC2 instance
     const instance = new ec2.Instance(this, "WireguardInstance", {
@@ -150,6 +172,11 @@ export class WireguardCdkStack extends Stack {
     new CfnOutput(this, "WireguardInstanceIP", {
       value: eip.attrPublicIp,
       description: "The public IP address of the WireGuard instance",
+    });
+
+    new CfnOutput(this, "WireguardBackupBucketOutput", {
+      value: backupBucket.bucketName,
+      description: "S3 bucket name for WireGuard backups",
     });
   }
 }

@@ -1,6 +1,3 @@
-volumes:
-  etc_wireguard:
-
 services:
   wg-easy:
     env_file:
@@ -13,7 +10,7 @@ services:
         ipv6_address: fdcc:ad94:bacf:61a3::2a
       caddy: {}
     volumes:
-      - etc_wireguard:/etc/wireguard
+      - ./data:/etc/wireguard
       - /lib/modules:/lib/modules:ro
     ports:
       - "51820:51820/udp"
