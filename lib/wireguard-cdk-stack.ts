@@ -3,7 +3,7 @@ import {
   CfnParameter,
   Duration,
   Stack,
-  StackProps,
+  type StackProps,
 } from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as assets from "aws-cdk-lib/aws-s3-assets";

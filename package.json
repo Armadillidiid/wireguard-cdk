@@ -2,14 +2,8 @@
   "name": "wireguard-cdk",
   "version": "0.1.0",
   "type": "module",
-  "bin": {
-    "wireguard-cdk": "bin/wireguard-cdk.js"
-  },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

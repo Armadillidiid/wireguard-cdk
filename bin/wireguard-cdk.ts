@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from "aws-cdk-lib";
-import { WireguardCdkStack } from "../lib/wireguard-cdk-stack.js";
-import { env } from "../env.js";
+import { WireguardCdkStack } from "../lib/wireguard-cdk-stack.ts";
+import { env } from "../env.ts";
 
 const app = new cdk.App();
 
