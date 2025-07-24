@@ -1,7 +1,19 @@
 {
   email {$EMAIL}
+  default_sni ${INSTANCE_IP}
 }
 
-{$DOMAIN}, {$INSTANCE_IP} {
+{$DOMAIN} {
+  handle /.well-known/acme-challenge/* {
+    file_server
+  }
+
+  handle {
+    reverse_proxy wg-easy:80
+  }
+}
+
+{$INSTANCE_IP} {
   reverse_proxy wg-easy:80
+  tls internal
 }
