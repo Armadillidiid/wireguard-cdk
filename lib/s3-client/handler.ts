@@ -15,22 +15,22 @@ import { z } from "zod";
 
 const s3Client = new S3Client();
 
-const s3CustomResourcePropertiesSchema = z.object({
+export const s3CustomResourcePropertiesSchema = z.object({
   BucketName: z.string(),
   Versioning: z.boolean().optional(),
   PublicReadAccess: z.boolean().optional(),
-  Encryption: z.enum(["aws:kms", "AES256"]).optional(),
+  Encryption: z.enum(ServerSideEncryption).optional(),
   KmsKeyId: z.string().optional(),
 });
 
-type S3CustomResourceProperties = z.infer<typeof s3CustomResourcePropertiesSchema>;
+export type S3CustomResourceProperties = z.infer<typeof s3CustomResourcePropertiesSchema>;
 
 interface CustomResourceEvent extends AWSCDKAsyncCustomResource.OnEventRequest {
   ResourceProperties: S3CustomResourceProperties;
   OldResourceProperties?: S3CustomResourceProperties;
 }
 
-exports.handler = async (event: CustomResourceEvent) => {
+const handler = async (event: CustomResourceEvent) => {
   console.log("Event:", JSON.stringify(event, null, 2));
 
   const { RequestType } = event;
@@ -280,3 +280,5 @@ async function handleDelete(event: CustomResourceEvent) {
     },
   };
 }
+
+export default handler;
