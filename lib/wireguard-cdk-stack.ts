@@ -1,6 +1,7 @@
 import {
   CfnOutput,
   CfnParameter,
+  CustomResource,
   Duration,
   Stack,
   type StackProps,
@@ -12,6 +13,11 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { CustomS3BucketProvider } from "./s3-client/provider.ts";
+import {
+  S3_CUSTOM_RESOURCE_RESPONSE_ATTR,
+  type S3CustomResourceProperties,
+} from "./s3-client/handler/index.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,12 +77,25 @@ export class WireguardCdkStack extends Stack {
       path: path.join(__dirname, "../assets"),
     });
 
-    // Create S3 bucket for WireGuard backups
-    const backupBucket = new s3.Bucket(this, "WireguardBackupBucket", {
-      bucketName: `wireguard-backups-${this.account}`,
-      publicReadAccess: false,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    // Create the custom resource
+    const bucketResource = new CustomResource(this, "BucketResource", {
+      serviceToken: CustomS3BucketProvider.getOrCreate(this),
+      properties: {
+        BucketName: `wireguard-backups-${this.account}`,
+        PublicReadAccess: false,
+        Versioning: false,
+      } satisfies S3CustomResourceProperties,
     });
+    const bucketName = bucketResource.getAttString(
+      S3_CUSTOM_RESOURCE_RESPONSE_ATTR.BUCKET_NAME,
+    );
+
+    // Import the bucket by name (works whether it was just created or already existed)
+    const backupBucket = s3.Bucket.fromBucketName(
+      this,
+      "ImportedOrCreatedBucket",
+      bucketName,
+    );
 
     const homeDir = "/home/ubuntu";
     const user = "ubuntu";
