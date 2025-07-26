@@ -1,6 +1,6 @@
 {
   email {$EMAIL}
-  default_sni ${INSTANCE_IP}
+  default_sni {$INSTANCE_IP}
 }
 
 {$DOMAIN} {

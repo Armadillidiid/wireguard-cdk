@@ -14,10 +14,8 @@ import { Construct } from "constructs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { CustomS3BucketProvider } from "./s3-client/provider.ts";
-import {
-  S3_CUSTOM_RESOURCE_RESPONSE_ATTR,
-  type S3CustomResourceProperties,
-} from "./s3-client/handler/index.ts";
+import { S3_CUSTOM_RESOURCE_RESPONSE_ATTR } from "./s3-client/handler/index.ts";
+import type { S3CustomResourceProperties } from "./s3-client/schema.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,13 +76,14 @@ export class WireguardCdkStack extends Stack {
     });
 
     // Create the custom resource
+    const bucketProperties = {
+      BucketName: `wireguard-backups-${this.account}-${this.region}`,
+      PublicReadAccess: false,
+      Versioning: true,
+    } satisfies S3CustomResourceProperties;
     const bucketResource = new CustomResource(this, "BucketResource", {
-      serviceToken: CustomS3BucketProvider.getOrCreate(this),
-      properties: {
-        BucketName: `wireguard-backups-${this.account}`,
-        PublicReadAccess: false,
-        Versioning: false,
-      } satisfies S3CustomResourceProperties,
+      serviceToken: CustomS3BucketProvider.getOrCreate(this, bucketProperties),
+      properties: bucketProperties,
     });
     const bucketName = bucketResource.getAttString(
       S3_CUSTOM_RESOURCE_RESPONSE_ATTR.BUCKET_NAME,
@@ -99,6 +98,11 @@ export class WireguardCdkStack extends Stack {
 
     const homeDir = "/home/ubuntu";
     const user = "ubuntu";
+
+    // Create Elastic IP
+    const eip = new ec2.CfnEIP(this, "WireguardEIP", {
+      domain: "vpc",
+    });
 
     // Add user data that is used to configure the EC2 instance
     const userData = ec2.UserData.forLinux();
@@ -119,8 +123,7 @@ export class WireguardCdkStack extends Stack {
       `chown -R ${user}:${user} ${homeDir}/wireguard`,
       `echo "DOMAIN=${props.domain}" > ${homeDir}/wireguard/.env`,
       `echo "EMAIL=${props.email}" >> ${homeDir}/wireguard/.env`,
-      "TOKEN=$(curl -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600')",
-      `echo "INSTANCE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)" >> ${homeDir}/wireguard/.env`,
+      `echo "INSTANCE_IP=${eip.attrPublicIp}" >> ${homeDir}/wireguard/.env`,
       `echo "INIT_USERNAME=${wireguardUsernameParam.valueAsString}" >> ${homeDir}/wireguard/.env`,
       `echo "INIT_PASSWORD=${wireguardPasswordParam.valueAsString}" >> ${homeDir}/wireguard/.env`,
       `chown ${user}:${user} ${homeDir}/wireguard/.env`,
@@ -143,7 +146,6 @@ export class WireguardCdkStack extends Stack {
       `chmod +x ${homeDir}/backup-wireguard.sh`,
       `chown ${user}:${user} ${homeDir}/backup-wireguard.sh`,
       `echo "0 0 * * * ${user} ${homeDir}/backup-wireguard.sh ${backupBucket.bucketName}" | tee /etc/cron.d/wg-easy-backup`,
-      `( sleep 60; ./${homeDir}/backup-wireguard.sh ${backupBucket.bucketName} ) &`,
     );
 
     // Create IAM role for the instance with S3 read/write permissions
@@ -183,11 +185,12 @@ export class WireguardCdkStack extends Stack {
     // Add the SSH Security Group to the EC2 instance
     instance.addSecurityGroup(sg);
 
-    // Create and associate Elastic IP
-    const eip = new ec2.CfnEIP(this, "WireguardEIP", {
-      domain: "vpc",
+    // Associate Elastic IP with instance
+    new ec2.CfnEIPAssociation(this, "WireguardEIPAssociation", {
+      allocationId: eip.attrAllocationId,
       instanceId: instance.instanceId,
     });
+
     new CfnOutput(this, "WireguardInstanceIP", {
       value: eip.attrPublicIp,
       description: "The public IP address of the WireGuard instance",

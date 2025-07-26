@@ -14,30 +14,24 @@ import {
   type PutBucketEncryptionCommandInput,
   NotFound,
   NoSuchBucket,
+  S3ServiceException,
 } from "@aws-sdk/client-s3";
-import { z } from "zod";
 
 const s3Client = new S3Client();
 
-export const s3CustomResourcePropertiesSchema = z.object({
-  BucketName: z.string(),
-  Versioning: z.boolean().optional(),
-  PublicReadAccess: z.boolean().optional(),
-  Encryption: z
-    .enum([ServerSideEncryption.AES256, ServerSideEncryption.aws_kms])
-    .optional(),
-  KmsKeyId: z.string().optional(),
-});
+type S3CustomResourceProperties = {
+  BucketName: string;
+  Versioning?: boolean | undefined;
+  PublicReadAccess?: boolean | undefined;
+  Encryption?: "AES256" | "aws:kms" | undefined;
+  KmsKeyId?: string | undefined;
+};
 
 export const S3_CUSTOM_RESOURCE_RESPONSE_ATTR = {
   BUCKET_NAME: "BucketName",
 } as const;
 
-export type S3CustomResourceProperties = z.infer<
-  typeof s3CustomResourcePropertiesSchema
->;
-
-const handler = async (
+export const handler = async (
   event: AWSCDKAsyncCustomResource.OnEventRequest,
 ): Promise<AWSCDKAsyncCustomResource.OnEventResponse> => {
   console.log("Event:", JSON.stringify(event, null, 2));
@@ -64,9 +58,9 @@ const handler = async (
 async function handleCreate(
   event: AWSCDKAsyncCustomResource.OnEventRequest,
 ): Promise<AWSCDKAsyncCustomResource.OnEventResponse> {
-  const resourceProperties = s3CustomResourcePropertiesSchema.parse(
-    event.ResourceProperties,
-  );
+  const resourceProperties =
+    event.ResourceProperties as S3CustomResourceProperties;
+
   const {
     BucketName: bucketName,
     Versioning: versioning,
@@ -91,11 +85,18 @@ async function handleCreate(
         [S3_CUSTOM_RESOURCE_RESPONSE_ATTR.BUCKET_NAME]: bucketName,
       },
     };
-  } catch (error: any) {
-    if (error.name === NotFound || error.name === NoSuchBucket) {
+  } catch (error) {
+    if (error instanceof NotFound || error instanceof NoSuchBucket) {
       console.log(`Bucket ${bucketName} does not exist, will create it`);
     } else {
-      console.error(`Error checking bucket existence: ${error.message}`);
+      if (error instanceof S3ServiceException) {
+        if (error.$metadata?.httpStatusCode === 301) {
+          console.error(
+            `Bucket ${bucketName} exists in a different region, skipping creation`,
+          );
+        }
+        console.error(`Error checking bucket existence: ${error.message}`);
+      }
       throw error;
     }
   }
@@ -183,9 +184,8 @@ async function handleCreate(
 async function handleUpdate(
   event: AWSCDKAsyncCustomResource.OnEventRequest,
 ): Promise<AWSCDKAsyncCustomResource.OnEventResponse> {
-  const resourceProperties = s3CustomResourcePropertiesSchema.parse(
-    event.ResourceProperties,
-  );
+  const resourceProperties =
+    event.ResourceProperties as S3CustomResourceProperties;
   const {
     BucketName: bucketName,
     Versioning: _versioning,
@@ -302,9 +302,8 @@ async function handleUpdate(
 async function handleDelete(
   event: AWSCDKAsyncCustomResource.OnEventRequest,
 ): Promise<AWSCDKAsyncCustomResource.OnEventResponse> {
-  const resourceProperties = s3CustomResourcePropertiesSchema.parse(
-    event.ResourceProperties,
-  );
+  const resourceProperties =
+    event.ResourceProperties as S3CustomResourceProperties;
   const { BucketName: bucketName } = resourceProperties;
 
   console.log(`Delete requested for bucket: ${bucketName}`);
