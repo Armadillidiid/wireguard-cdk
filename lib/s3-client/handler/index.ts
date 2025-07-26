@@ -1,6 +1,4 @@
-/// <reference path="../../node_modules/aws-cdk-lib/custom-resources/lib/provider-framework/types.d.ts" />
-/* eslint-disable import/no-extraneous-dependencies */
-/* eslint-disable no-console */
+/// <reference path="../../../types/custom-resource.d.ts" />
 
 import {
   S3Client,
@@ -9,7 +7,13 @@ import {
   PutBucketEncryptionCommand,
   PutPublicAccessBlockCommand,
   HeadBucketCommand,
+  DeleteBucketCommand,
+  ListObjectsV2Command,
   ServerSideEncryption,
+  BucketAlreadyOwnedByYou,
+  type PutBucketEncryptionCommandInput,
+  NotFound,
+  NoSuchBucket,
 } from "@aws-sdk/client-s3";
 import { z } from "zod";
 
@@ -19,18 +23,23 @@ export const s3CustomResourcePropertiesSchema = z.object({
   BucketName: z.string(),
   Versioning: z.boolean().optional(),
   PublicReadAccess: z.boolean().optional(),
-  Encryption: z.enum(ServerSideEncryption).optional(),
+  Encryption: z
+    .enum([ServerSideEncryption.AES256, ServerSideEncryption.aws_kms])
+    .optional(),
   KmsKeyId: z.string().optional(),
 });
 
-export type S3CustomResourceProperties = z.infer<typeof s3CustomResourcePropertiesSchema>;
+export const S3_CUSTOM_RESOURCE_RESPONSE_ATTR = {
+  BUCKET_NAME: "BucketName",
+} as const;
 
-interface CustomResourceEvent extends AWSCDKAsyncCustomResource.OnEventRequest {
-  ResourceProperties: S3CustomResourceProperties;
-  OldResourceProperties?: S3CustomResourceProperties;
-}
+export type S3CustomResourceProperties = z.infer<
+  typeof s3CustomResourcePropertiesSchema
+>;
 
-const handler = async (event: CustomResourceEvent) => {
+const handler = async (
+  event: AWSCDKAsyncCustomResource.OnEventRequest,
+): Promise<AWSCDKAsyncCustomResource.OnEventResponse> => {
   console.log("Event:", JSON.stringify(event, null, 2));
 
   const { RequestType } = event;
@@ -52,7 +61,9 @@ const handler = async (event: CustomResourceEvent) => {
   }
 };
 
-async function handleCreate(event: CustomResourceEvent) {
+async function handleCreate(
+  event: AWSCDKAsyncCustomResource.OnEventRequest,
+): Promise<AWSCDKAsyncCustomResource.OnEventResponse> {
   const resourceProperties = s3CustomResourcePropertiesSchema.parse(
     event.ResourceProperties,
   );
@@ -66,7 +77,30 @@ async function handleCreate(event: CustomResourceEvent) {
 
   console.log(`Creating bucket: ${bucketName}`);
 
-  // Create the bucket
+  // Check if bucket already exists first
+  try {
+    await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+    console.log(
+      `Bucket ${bucketName} already exists - skipping creation and configuration`,
+    );
+
+    // Early return if bucket exists
+    return {
+      PhysicalResourceId: bucketName,
+      Data: {
+        [S3_CUSTOM_RESOURCE_RESPONSE_ATTR.BUCKET_NAME]: bucketName,
+      },
+    };
+  } catch (error: any) {
+    if (error.name === NotFound || error.name === NoSuchBucket) {
+      console.log(`Bucket ${bucketName} does not exist, will create it`);
+    } else {
+      console.error(`Error checking bucket existence: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // Create bucket
   try {
     await s3Client.send(
       new CreateBucketCommand({
@@ -74,8 +108,8 @@ async function handleCreate(event: CustomResourceEvent) {
       }),
     );
     console.log(`Bucket ${bucketName} created successfully`);
-  } catch (error: any) {
-    if (error.name === "BucketAlreadyOwnedByYou") {
+  } catch (error) {
+    if (error instanceof BucketAlreadyOwnedByYou) {
       console.log(`Bucket ${bucketName} already exists and is owned by you`);
     } else {
       throw error;
@@ -110,7 +144,7 @@ async function handleCreate(event: CustomResourceEvent) {
 
   // Configure encryption if specified
   if (encryption) {
-    const encryptionConfig: any = {
+    const encryptionConfig: PutBucketEncryptionCommandInput = {
       Bucket: bucketName,
       ServerSideEncryptionConfiguration: {
         Rules: [
@@ -127,8 +161,11 @@ async function handleCreate(event: CustomResourceEvent) {
     };
 
     if (encryption === "aws:kms" && kmsKeyId) {
-      encryptionConfig.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID =
-        kmsKeyId;
+      const rule =
+        encryptionConfig.ServerSideEncryptionConfiguration?.Rules?.[0];
+      if (rule?.ApplyServerSideEncryptionByDefault) {
+        rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID = kmsKeyId;
+      }
     }
 
     await s3Client.send(new PutBucketEncryptionCommand(encryptionConfig));
@@ -138,18 +175,20 @@ async function handleCreate(event: CustomResourceEvent) {
   return {
     PhysicalResourceId: bucketName,
     Data: {
-      BucketName: bucketName,
+      [S3_CUSTOM_RESOURCE_RESPONSE_ATTR.BUCKET_NAME]: bucketName,
     },
   };
 }
 
-async function handleUpdate(event: CustomResourceEvent) {
+async function handleUpdate(
+  event: AWSCDKAsyncCustomResource.OnEventRequest,
+): Promise<AWSCDKAsyncCustomResource.OnEventResponse> {
   const resourceProperties = s3CustomResourcePropertiesSchema.parse(
     event.ResourceProperties,
   );
   const {
     BucketName: bucketName,
-    Versioning: versioning,
+    Versioning: _versioning,
     PublicReadAccess: publicReadAccess,
     Encryption: encryption,
     KmsKeyId: kmsKeyId,
@@ -168,7 +207,7 @@ async function handleUpdate(event: CustomResourceEvent) {
     return {
       PhysicalResourceId: oldProps?.BucketName, // Keep old physical ID
       Data: {
-        BucketName: oldProps?.BucketName,
+        [S3_CUSTOM_RESOURCE_RESPONSE_ATTR.BUCKET_NAME]: oldProps?.BucketName,
       },
     };
   }
@@ -177,13 +216,8 @@ async function handleUpdate(event: CustomResourceEvent) {
   try {
     await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
   } catch (error) {
-    console.log("Bucket does not exist - skipping update");
-    return {
-      PhysicalResourceId: bucketName,
-      Data: {
-        BucketName: bucketName,
-      },
-    };
+    console.error("Bucket does not exist - skipping update");
+    throw error;
   }
 
   // Update versioning if changed and safe to do so
@@ -200,9 +234,8 @@ async function handleUpdate(event: CustomResourceEvent) {
       );
       console.log("Versioning enabled");
     } else {
-      // Disabling versioning could be destructive, so skip
       console.log(
-        "Versioning disable requested - skipping to avoid potential data loss",
+        "Versioning disable requested - skipping as it's not possible",
       );
     }
   }
@@ -229,7 +262,7 @@ async function handleUpdate(event: CustomResourceEvent) {
     oldProps?.KmsKeyId !== newProps.KmsKeyId
   ) {
     if (encryption) {
-      const encryptionConfig: any = {
+      const encryptionConfig: PutBucketEncryptionCommandInput = {
         Bucket: bucketName,
         ServerSideEncryptionConfiguration: {
           Rules: [
@@ -246,8 +279,11 @@ async function handleUpdate(event: CustomResourceEvent) {
       };
 
       if (encryption === "aws:kms" && kmsKeyId) {
-        encryptionConfig.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID =
-          kmsKeyId;
+        const rule =
+          encryptionConfig.ServerSideEncryptionConfiguration?.Rules?.[0];
+        if (rule?.ApplyServerSideEncryptionByDefault) {
+          rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID = kmsKeyId;
+        }
       }
 
       await s3Client.send(new PutBucketEncryptionCommand(encryptionConfig));
@@ -258,25 +294,53 @@ async function handleUpdate(event: CustomResourceEvent) {
   return {
     PhysicalResourceId: bucketName,
     Data: {
-      BucketName: bucketName,
+      [S3_CUSTOM_RESOURCE_RESPONSE_ATTR.BUCKET_NAME]: bucketName,
     },
   };
 }
 
-async function handleDelete(event: CustomResourceEvent) {
+async function handleDelete(
+  event: AWSCDKAsyncCustomResource.OnEventRequest,
+): Promise<AWSCDKAsyncCustomResource.OnEventResponse> {
   const resourceProperties = s3CustomResourcePropertiesSchema.parse(
     event.ResourceProperties,
   );
   const { BucketName: bucketName } = resourceProperties;
 
-  console.log(
-    `Delete requested for bucket: ${bucketName} - doing nothing as requested`,
-  );
+  console.log(`Delete requested for bucket: ${bucketName}`);
+
+  try {
+    // Check if bucket exists
+    await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+    console.log(`Bucket ${bucketName} exists, checking if it's empty`);
+
+    // Check if bucket is empty
+    const listResult = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: bucketName,
+        MaxKeys: 1, // Only need to check if any objects exist
+      }),
+    );
+
+    if (listResult.Contents && listResult.Contents.length > 0) {
+      console.log(
+        `Bucket ${bucketName} contains objects, skipping deletion to prevent data loss`,
+      );
+      console.log(`Found ${listResult.KeyCount} objects in bucket`);
+    } else {
+      // Bucket is empty, safe to delete
+      await s3Client.send(new DeleteBucketCommand({ Bucket: bucketName }));
+      console.log(`Bucket ${bucketName} deleted successfully`);
+    }
+  } catch (error) {
+    console.error("Error during bucket deletion");
+    throw error;
+  }
 
   return {
     PhysicalResourceId: bucketName,
     Data: {
-      BucketName: bucketName,
+      [S3_CUSTOM_RESOURCE_RESPONSE_ATTR.BUCKET_NAME]: bucketName,
     },
   };
 }
