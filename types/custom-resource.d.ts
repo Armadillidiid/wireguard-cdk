@@ -10,7 +10,9 @@ export as namespace AWSCDKAsyncCustomResource;
 /**
  * Signature for the `onEvent` handler, which is called when a lifecycle event occurs.
  */
-export type OnEventHandler = (event: OnEventRequest) => Promise<OnEventResponse | undefined>;
+export type OnEventHandler = (
+  event: OnEventRequest,
+) => Promise<OnEventResponse | undefined>;
 
 /**
  * Signature for the `isComplete` handler, which is called to detemrine if the
@@ -19,18 +21,30 @@ export type OnEventHandler = (event: OnEventRequest) => Promise<OnEventResponse 
  * provider) until a timeout occurs, an error is thrown or until it returns
  * `true`.
  */
-export type IsCompleteHandler = (event: IsCompleteRequest) => Promise<IsCompleteResponse>;
+export type IsCompleteHandler = (
+  event: IsCompleteRequest,
+) => Promise<IsCompleteResponse>;
 
 /**
  * The object passed to the user-defined `onEvent` handler.
  */
-export interface OnEventRequest extends AWSLambda.CloudFormationCustomResourceEventCommon {
+export interface OnEventRequest {
   /**
    * The request type is set by the AWS CloudFormation stack operation
    * (create-stack, update-stack, or delete-stack) that was initiated by the
    * template developer for the stack that contains the custom resource.
    */
-  readonly RequestType: 'Create' | 'Update' | 'Delete';
+  readonly RequestType: "Create" | "Update" | "Delete";
+
+  /**
+   * The template developer-chosen name (logical ID) of the custom resource in the AWS CloudFormation template.
+   */
+  readonly LogicalResourceId: string;
+
+  /**
+   * This field contains the properties defined in the template for this custom resource.
+   */
+  readonly ResourceProperties: { [key: string]: any };
 
   /**
    * Used only for Update requests. Contains the resource properties that were
@@ -45,12 +59,28 @@ export interface OnEventRequest extends AWSLambda.CloudFormationCustomResourceEv
    * Always sent with 'Update' and 'Delete' requests; never sent with 'Create'.
    */
   readonly PhysicalResourceId?: string;
+
+  /**
+   * The resource type defined for this custom resource in the template.
+   * A provider may handle any number of custom resource types.
+   */
+  readonly ResourceType: string;
+
+  /**
+   * A unique ID for the request.
+   */
+  readonly RequestId: string;
+
+  /**
+   * The ARN that identifies the stack that contains the custom resource.
+   */
+  readonly StackId: string;
 }
 
 /**
  * The object returned from the user-defined `onEvent` handler.
  */
-interface OnEventResponse {
+export interface OnEventResponse {
   /**
    * A required custom resource provider-defined physical ID that is unique for
    * that provider.
