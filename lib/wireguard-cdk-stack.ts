@@ -48,10 +48,8 @@ export class WireguardCdkStack extends Stack {
       noEcho: true,
     });
 
-    // Get default VPC
     const vpc = ec2.Vpc.fromLookup(this, "VPC", { isDefault: true });
 
-    // Create security group for inbound and outbound traffic
     const sg = new ec2.SecurityGroup(this, "SSHSecurityGroup", {
       vpc: vpc,
       description: "Security Group for SSH",
@@ -70,12 +68,11 @@ export class WireguardCdkStack extends Stack {
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.udp(51820));
     sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(51821));
 
-    // Create asset from `assets` directory to include configuration files
     const configAsset = new assets.Asset(this, "ConfigAsset", {
       path: path.join(__dirname, "../assets"),
     });
 
-    // Create the custom resource
+    // Conditionally create S3 bucket if does not exist
     const bucketProperties = {
       BucketName: `wireguard-backups-${this.account}-${this.region}`,
       PublicReadAccess: false,
@@ -89,7 +86,7 @@ export class WireguardCdkStack extends Stack {
       S3_CUSTOM_RESOURCE_RESPONSE_ATTR.BUCKET_NAME,
     );
 
-    // Import the bucket by name (works whether it was just created or already existed)
+    // Import bucket whether it was just created or already existed
     const backupBucket = s3.Bucket.fromBucketName(
       this,
       "ImportedOrCreatedBucket",
@@ -99,13 +96,13 @@ export class WireguardCdkStack extends Stack {
     const homeDir = "/home/ubuntu";
     const user = "ubuntu";
 
-    // Create Elastic IP
     const eip = new ec2.CfnEIP(this, "WireguardEIP", {
       domain: "vpc",
     });
 
-    // Add user data that is used to configure the EC2 instance
     const userData = ec2.UserData.forLinux();
+    // NOTE: Below adds `cfn-signal` and other AWS utilities to the instance
+    // Failure to do this will cause the CFN stack to hang indefinitely
     userData.addCommands(
       "apt-get update -y",
       "apt-get install -y python3-pip",
@@ -114,9 +111,15 @@ export class WireguardCdkStack extends Stack {
       "ln -s /usr/local/bin/cfn-* /opt/aws/bin/",
       "ln -s /usr/local/bin/cfn-hup /etc/init.d/cfn-hup",
       "snap install aws-cli --classic",
-      "apt-get install -y git ec2-instance-connect unzip docker.io docker-compose",
     );
+
+    // Setup WireGuard
     userData.addCommands(
+      "apt-get install -y git ec2-instance-connect unzip docker.io docker-compose",
+      "systemctl enable docker",
+      "systemctl start docker",
+      `usermod -aG docker ${user}`,
+      "newgrp docker",
       `aws s3 cp s3://${configAsset.s3BucketName}/${configAsset.s3ObjectKey} /tmp/assets.zip`,
       `mkdir -p ${homeDir}/wireguard`,
       `unzip -d ${homeDir}/wireguard /tmp/assets.zip`,
@@ -127,10 +130,6 @@ export class WireguardCdkStack extends Stack {
       `echo "INIT_USERNAME=${wireguardUsernameParam.valueAsString}" >> ${homeDir}/wireguard/.env`,
       `echo "INIT_PASSWORD=${wireguardPasswordParam.valueAsString}" >> ${homeDir}/wireguard/.env`,
       `chown ${user}:${user} ${homeDir}/wireguard/.env`,
-      "systemctl enable docker",
-      "systemctl start docker",
-      `usermod -aG docker ${user}`,
-      "newgrp docker",
       `cd ${homeDir}/wireguard`,
       `mkdir -p ${homeDir}/wireguard/data`,
       `chown -R ${user}:${user} ${homeDir}/wireguard/data`,
@@ -141,6 +140,7 @@ export class WireguardCdkStack extends Stack {
       "docker-compose -f docker-compose.yml up -d",
     );
 
+    // Setup backup
     userData.addCommands(
       `cp ${homeDir}/wireguard/backup-wireguard.sh ${homeDir}/backup-wireguard.sh`,
       `chmod +x ${homeDir}/backup-wireguard.sh`,
@@ -148,14 +148,12 @@ export class WireguardCdkStack extends Stack {
       `echo "0 0 * * * ${user} ${homeDir}/backup-wireguard.sh ${backupBucket.bucketName}" | tee /etc/cron.d/wg-easy-backup`,
     );
 
-    // Create IAM role for the instance with S3 read/write permissions
     const role = new iam.Role(this, "InstanceRole", {
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
     });
     configAsset.grantRead(role);
     backupBucket.grantReadWrite(role);
 
-    // Create a new EC2 instance
     const instance = new ec2.Instance(this, "WireguardInstance", {
       vpc: vpc,
       instanceType: ec2.InstanceType.of(
@@ -182,10 +180,8 @@ export class WireguardCdkStack extends Stack {
       requireImdsv2: true,
     });
 
-    // Add the SSH Security Group to the EC2 instance
     instance.addSecurityGroup(sg);
 
-    // Associate Elastic IP with instance
     new ec2.CfnEIPAssociation(this, "WireguardEIPAssociation", {
       allocationId: eip.attrAllocationId,
       instanceId: instance.instanceId,
