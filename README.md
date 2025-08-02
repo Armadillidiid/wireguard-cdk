@@ -1,16 +1,17 @@
-# WireGuard CDK Stack
+# WireGuard CDK
 
-This CDK project deploys a WireGuard VPN server on AWS EC2 with automatic SSL certificates and unattended setup.
+This project deploys [WireGuard](https://www.wireguard.com/) VPN using [wg-easy](https://github.com/wg-easy/wg-easy) on AWS EC2 with automatic backups to S3.
+
+## Prerequisites
+
+- AWS Account
+- AWS CLI configured with appropriate permissions
 
 ## Environment Variables
 
 Create a `.env` file or set the following environment variables:
 
 ```bash
-# AWS Configuration
-CDK_DEFAULT_ACCOUNT=your-aws-account-id
-CDK_DEFAULT_REGION=us-east-1
-
 # EC2 Instance Configuration
 EC2_INSTANCE_CLASS=t3
 EC2_INSTANCE_SIZE=micro
@@ -21,17 +22,9 @@ DOMAIN=vpn.example.com
 EMAIL=admin@example.com
 ```
 
-## WireGuard Admin Configuration
+The WireGuard admin credentials are provided as [CloudFormation parameters](https://docs.aws.amazon.com/cdk/v2/guide/parameters.html) at deployment time, instead of at synthesis time. This is to enhance security by avoiding exposure in the CFN template or stack logs.
 
-The WireGuard admin credentials are provided as CloudFormation parameters at deployment time. If not provided, defaults will be used (`admin` / `admin123`).
-
-**Option 1: Using CDK Deploy Parameters (Recommended)**
-```bash
-pnpx cdk deploy --parameters WireguardUsername=myadmin --parameters WireguardPassword=MySecurePassword123
-```
-
-**Option 2: Using CloudFormation Console**
-When deploying through the AWS CloudFormation console, you'll be prompted to enter the parameter values.
+Also, no key pair is generated. You must provide your machine's SSH public key for SSH access. This is catted to `.ssh/authorized_keys` in the instance.
 
 ## Deployment
 
@@ -43,23 +36,23 @@ When deploying through the AWS CloudFormation console, you'll be prompted to ent
 
 2. Set up your environment variables (create `.env` file or export them)
 
-3. Deploy the stack:
+3. Deploy the stack.
 
    ```bash
-   pnpx cdk deploy --parameters WireguardUsername=myadmin --parameters WireguardPassword=MySecurePassword123
+   pnpm exec cdk deploy --parameters WireguardUsername='admin' --parameters WireguardPassword='MySecurePassword123$'
+
    ```
 
-4. After deployment, access your WireGuard admin panel at:
+4. (Optional): After deployment, point your domain's DNS to the public IP of the EC2 instance. You should be able to find the public IP outputted in the logs.
+
+5. Access your WireGuard admin panel at your public IP.
+
+   ```
+   https://192.xxx.xx.xx
+   ```
+
+   Or if you configured a domain:
 
    ```
    https://your-domain.com
    ```
-
-## Useful commands
-
-- `pnpm run build` compile typescript to js
-- `pnpm run watch` watch for changes and compile
-- `pnpm run test` perform the jest unit tests
-- `pnpx cdk deploy` deploy this stack to your default AWS account/region
-- `pnpx cdk diff` compare deployed stack with current state
-- `pnpx cdk synth` emits the synthesized CloudFormation template
