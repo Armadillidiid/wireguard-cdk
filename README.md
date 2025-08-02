@@ -44,7 +44,7 @@ It's also good to note that no key pair is generated. You must provide your mach
    pnpm exec cdk deploy --parameters WireguardUsername='admin' --parameters WireguardPassword='MySecurePassword123$'
    ```
 
-4. (Optional): After deployment, point your domain's DNS to the public IP of the EC2 instance. You should be able to find the public IP outputted in the logs.
+4. After deployment, you'll get the public IP address in the CloudFormation outputs. You can use this to create an A record in your DNS provider.
 
 5. Access your WireGuard admin panel at your public IP.
 
@@ -57,3 +57,27 @@ It's also good to note that no key pair is generated. You must provide your mach
    ```
    https://your-domain.com
    ```
+
+## Important Note
+
+There's a chicken-and-egg problem with SSL certificate provisioning on first deployment. When you first deploy, Caddy will attempt to get an SSL certificate via ACME challenge. Since the DNS record doesn't exist yet, this will fail and Caddy will be temporarily throttled.
+
+To resolve this, use the IP address to access the dashboard initially. Caddy will automatically retry the certificate request periodically. Once Caddy retries, you should be able to access the admin panel via your domain name.
+
+For the VPN itself, it works immediately, and you can use your domain name as the WireGuard hostname even before SSL is working. WireGuard uses its own encryption and doesn't rely on TLS/SSL certificates.
+
+If you want the domain working instantly, you can SSH into the instance and restart Caddy server: `docker-compose -f wireguard/docker-compose.proxy.yml restart caddy`
+
+## Troubleshooting
+
+### SSL Certificate Issues
+
+Like explained previously, this is expected behavior on first deployment. Use `https://your-public-ip` to access the admin panel in the meantime, until Caddy can retry acme challenges and successfully obtain the SSL certificate.
+
+### Can't connect to VPN using domain name
+
+WireGuard protocol doesn't require SSL/TLS so ensure your hostname is set correctly in the WireGuard client configuration and matches the domain you set up
+
+### Can't SSH into the instance
+
+Enbsure your SSH public key is correctly set in the `SSH_PUB_KEY` environment variable
