@@ -93,8 +93,8 @@ export class WireguardCdkStack extends Stack {
       bucketName,
     );
 
-    const homeDir = "/home/ubuntu";
     const user = "ubuntu";
+    const homeDir = `/home/${user}`;
 
     const eip = new ec2.CfnEIP(this, "WireguardEIP", {
       domain: "vpc",
@@ -162,8 +162,8 @@ export class WireguardCdkStack extends Stack {
       ),
       machineImage: ec2.MachineImage.fromSsmParameter(
         "/aws/service/canonical/ubuntu/server/jammy/stable/current/amd64/hvm/ebs-gp2/ami-id", // Ubuntu 22.04 LTS
-        { os: ec2.OperatingSystemType.LINUX, userData: userData },
       ),
+      userData: userData,
       securityGroup: sg,
       role: role,
       init: ec2.CloudFormationInit.fromElements(
@@ -174,8 +174,6 @@ export class WireguardCdkStack extends Stack {
       ),
       initOptions: {
         timeout: Duration.minutes(10),
-        includeUrl: true,
-        includeRole: true,
       },
       requireImdsv2: true,
     });
