@@ -60,9 +60,9 @@ It's also good to note that no key pair is generated. You must provide your mach
 
 ## Important Note
 
-There's a chicken-and-egg problem with SSL certificate provisioning on first deployment. When you first deploy, Caddy will attempt to get an SSL certificate via ACME challenge. Since the DNS record doesn't exist yet, this will fail and Caddy will be temporarily throttled.
+There's a chicken-and-egg problem with SSL certificate provisioning on first deployment. When you first deploy, Caddy will attempt to get an SSL certificate via ACME challenge. Since the DNS record doesn't exist yet to reach the server, this will fail and Caddy will be temporarily throttled to avoid hitting rate limits.
 
-To resolve this, use the IP address to access the dashboard initially. Caddy will automatically retry the certificate request periodically. Once Caddy retries, you should be able to access the admin panel via your domain name.
+To resolve this, use the IP address to access the dashboard initially. Caddy will automatically retry the certificate request periodically (max one day ceiling). Once Caddy retries, you should be able to access the admin panel via your domain name.
 
 For the VPN itself, it works immediately, and you can use your domain name as the WireGuard hostname even before SSL is working. WireGuard uses its own encryption and doesn't rely on TLS/SSL certificates.
 
